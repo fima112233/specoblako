@@ -1,0 +1,11 @@
+# Спецоблако на Render — публичный просмотр, загрузка через секретную админку.
+# Секреты задаются в панели Render (Environment), НЕ в этом файле.
+services:
+  - type: web
+    name: speccloud
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    # Логи подавляем (>/dev/null), чтобы не расходовали память/место.
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --access-logfile /dev/null --error-logfile /dev/null cloud:app"
+    healthCheckPath: /
