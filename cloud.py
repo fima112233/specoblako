@@ -181,6 +181,8 @@ T_ADMIN = r'''<!DOCTYPE html>
   .f-item .name{font-weight:600;font-size:14px}
   .f-item .meta{font-size:12px;color:var(--mut);margin-top:2px}
   .f-item a{color:var(--acc);text-decoration:none;font-size:12.5px}
+  .del-btn{background:rgba(255,90,90,.12);border-color:rgba(255,90,90,.4);color:#ff9a9a;font-size:12px}
+  .del-btn:hover{border-color:#ff7a7a;color:#ff7a7a}
   .lock{color:var(--mut);font-size:12px;text-align:center;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
 </style>
 </head>
@@ -211,7 +213,7 @@ T_ADMIN = r'''<!DOCTYPE html>
         <div class="meta">{{ "%.2f"|format(f.size/1024) }} КБ · {{ f.mtime }}</div>
         <a href="/f/{{ f.name }}" target="_blank">открыть ↗</a>
       </div>
-      <div style="color:var(--mut);font-size:11px">🔒 не удаляется</div>
+      <button class="btn del-btn" onclick="delFile('{{ f.name }}')">🗑 Удалить</button>
     </div>
     {% endfor %}
   </div>
@@ -254,6 +256,15 @@ T_ADMIN = r'''<!DOCTYPE html>
     }catch(e){ status.textContent='Ошибка: '+e.message; }
     finally { btn.disabled=false; btn.textContent='📦 Скачать бэкап всех фото'; }
   };
+  async function delFile(name){
+    if(!confirm('Удалить файл «'+name+'»?')) return;
+    try{
+      const r=await fetch('/api/admin/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})});
+      const d=await r.json();
+      if(r.ok && d.ok){ status.textContent='🗑 Удалено: '+name; setTimeout(function(){location.reload();},600); }
+      else { alert('Ошибка: '+(d.error||'не удалось')); }
+    }catch(e){ alert('Ошибка: '+e.message); }
+  }
 </script>
 </body>
 </html>'''
@@ -365,6 +376,22 @@ def admin_upload():
         name = f"{base}__{i}.{ext}" if dot else f"{base}__{i}"
     f.save(os.path.join(UPLOAD_DIR, name))
     return jsonify({"ok": True, "name": name, "note": "файл защищён от удаления"})
+
+
+@app.route("/api/admin/delete", methods=["POST"])
+def admin_delete():
+    """Удаление файла — ТОЛЬКО для авторизованного админа."""
+    if not session.get("cloud_auth"):
+        return jsonify({"error": "не авторизован"}), 401
+    data = request.get_json(silent=True) or {}
+    name = os.path.basename((data.get("name") or "").strip())
+    if not name:
+        return jsonify({"error": "нет имени файла"}), 400
+    p = os.path.join(UPLOAD_DIR, name)
+    if not os.path.isfile(p):
+        return jsonify({"error": "файл не найден"}), 404
+    os.remove(p)
+    return jsonify({"ok": True, "deleted": name})
 
 
 @app.route("/api/admin/backup", methods=["GET"])
